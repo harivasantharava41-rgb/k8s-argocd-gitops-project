@@ -1,0 +1,56 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-creds')
+        IMAGE_NAME             = 'YOUR_DOCKERHUB_USERNAME/gitops-demo-app'
+        GIT_CREDENTIALS        = credentials('github-creds')
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                dir('app') {
+                    sh "docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} -t ${IMAGE_NAME}:latest ."
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                sh "echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin"
+                sh "docker push ${IMAGE_NAME}:${BUILD_NUMBER}"
+                sh "docker push ${IMAGE_NAME}:latest"
+            }
+        }
+
+        stage('Update Helm values (GitOps trigger)') {
+            steps {
+                sh """
+                    sed -i 's|tag:.*|tag: ${BUILD_NUMBER}|' helm-chart/values.yaml
+                    git config user.email "ci@harivasanth.dev"
+                    git config user.name "Jenkins CI"
+                    git add helm-chart/values.yaml
+                    git commit -m "ci: bump image tag to ${BUILD_NUMBER}"
+                    git push https://${GIT_CREDENTIALS_USR}:${GIT_CREDENTIALS_PSW}@github.com/harivasantharava41-rgb/k8s-argocd-gitops-project.git HEAD:main
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Image ${IMAGE_NAME}:${BUILD_NUMBER} pushed. ArgoCD will sync it to the cluster automatically."
+        }
+        failure {
+            echo "Pipeline failed — check logs above."
+        }
+    }
+}
