@@ -1,0 +1,38 @@
+replicaCount: 2
+
+image:
+  repository: YOUR_DOCKERHUB_USERNAME/gitops-demo-app
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 5000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+env:
+  APP_VERSION: "v1"
+
+livenessProbe:
+  path: /healthz
+  initialDelaySeconds: 10
+  periodSeconds: 15
+
+readinessProbe:
+  path: /readyz
+  initialDelaySeconds: 5
+  periodSeconds: 10
